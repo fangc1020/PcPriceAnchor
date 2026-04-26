@@ -1,0 +1,21 @@
+# 内存条品牌别名映射
+# 格式：规范名称: [别名列表]（小写匹配，normalizer.py 读取时统一转小写比较）
+
+Kingston:   [金士顿, kingston]
+G.Skill:    [芝奇, gskill, g-skill, gskill]
+Corsair:    [海盗船, corsair]
+ADATA:      [威刚, adata]
+Crucial:    [英睿达, crucial, micron crucial]
+TeamGroup:  [十铨, team, teamgroup]
+Gloway:     [光威, gloway]
+JUHOR:      [玖合, juhor]
+Asgard:     [阿斯加特, asgard]
+Lexar:      [雷克沙, lexar]
+KLEVV:      [科赋, klevv]
+Samsung:    [三星, samsung]
+SK Hynix:   [海力士, sk hynix, hynix, skhynix]
+Micron:     [镁光, micron]
+Patriot:    [博帝, patriot]
+XPG:        [威刚xpg, xpg]          # XPG 是 ADATA 旗下高端线，单独列出
+ZADAK:      [zadak]
+Timetec:    [timetec]
