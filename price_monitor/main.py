@@ -4,6 +4,8 @@ import argparse
 import asyncio
 import logging
 import sys
+from datetime import datetime
+from pathlib import Path
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
@@ -11,6 +13,7 @@ from price_monitor.config.settings import settings
 from price_monitor.crawlers.jd.search import JdSearchCrawler
 from price_monitor.crawlers.jd.playwright_search import JdSearchPlaywrightCrawler
 from price_monitor.crawlers.jd.stealth_crawler import JdStealthCrawler
+from price_monitor.crawlers.jd.cdp_crawler import JdCdpCrawler
 from price_monitor.cleaners.ram import RamCleaner
 from price_monitor.scheduler.tasks import CrawlTask
 
@@ -24,12 +27,14 @@ logger = logging.getLogger(__name__)
 async def run_once(
     keyword: str = "DDR5 内存条",
     category: str = "ram",
-    max_pages: int = 3,
+    max_pages: int = 5,
     dry_run: bool = False,
     engine: str = "playwright",
 ) -> None:
     """单次采集（用于调试和一次性测试）。"""
-    if engine == "stealth":
+    if engine == "cdp":
+        crawler = JdCdpCrawler()
+    elif engine == "stealth":
         crawler = JdStealthCrawler(headless=False)
     elif engine == "playwright":
         crawler = JdSearchPlaywrightCrawler(headless=False, slow_mo=300)
@@ -89,21 +94,34 @@ async def run_analysis() -> None:
 
         ranker = ValueRanker()
         rankings = ranker.rank(products, trends)
+        grouped = ranker.group_rank(rankings)
 
-        # Output
-        md = ReportGenerator.to_markdown(rankings)
+        now = datetime.now()
+        date_str = now.strftime("%Y-%m-%d")
+        json_str = ReportGenerator.to_json(grouped)
+        md = ReportGenerator.to_markdown(grouped)
+
+        # Print to terminal
         print(md)
+
+        # Save to files
+        reports_dir = Path("reports")
+        reports_dir.mkdir(exist_ok=True)
+        (reports_dir / f"report_{date_str}.md").write_text(md, encoding="utf-8")
+        (reports_dir / f"report_{date_str}.json").write_text(json_str, encoding="utf-8")
+        ReportGenerator.to_excel(grouped, reports_dir / f"report_{date_str}.xlsx")
+        logger.info("Reports saved to reports/report_%s.{md,json,xlsx}", date_str)
 
         # Optionally push to Feishu
         if settings.feishu_webhook_url:
-            await _send_feishu(rankings)
+            await _send_feishu(grouped)
 
 
-async def _send_feishu(rankings) -> None:
+async def _send_feishu(grouped) -> None:
     import httpx
     from price_monitor.analysis.report import ReportGenerator
 
-    card = ReportGenerator.to_feishu_card(rankings)
+    card = ReportGenerator.to_feishu_card(grouped)
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(10.0)) as client:
             resp = await client.post(
@@ -147,8 +165,8 @@ if __name__ == "__main__":
     once_p.add_argument("--dry-run", action="store_true", help="Skip DB, just crawl + clean + print")
     once_p.add_argument("--keyword", default="DDR5 内存条", help="Search keyword")
     once_p.add_argument("--pages", type=int, default=3, help="Max pages to crawl")
-    once_p.add_argument("--engine", choices=["playwright", "httpx", "stealth"], default="stealth",
-                        help="Crawl engine (default: stealth)")
+    once_p.add_argument("--engine", choices=["cdp", "playwright", "httpx", "stealth"], default="cdp",
+                        help="Crawl engine (default: cdp)")
 
     sub.add_parser("analyze", help="Run analysis + report (requires DB)")
 

@@ -20,9 +20,35 @@ class ValueScore:
     capacity_gb: int = 0
     kit_count: int = 1
     speed_mhz: int = 0
+    cl_latency: int | None = None
+    die_type: str | None = None
     memory_type: str = ""
+    form_factor: str = ""
     final_fen: int = 0
     recommendation: str = ""
+
+    @property
+    def total_capacity(self) -> int:
+        return self.capacity_gb * self.kit_count
+
+    @property
+    def cl_tier(self) -> str:
+        if self.cl_latency is None:
+            return "CL未知"
+        if self.cl_latency <= 30:
+            return "CL28-30"
+        if self.cl_latency <= 36:
+            return "CL32-36"
+        if self.cl_latency <= 40:
+            return "CL38-40"
+        return "CL42+"
+
+    @property
+    def group_key(self) -> str:
+        return (
+            f"{self.memory_type} {self.form_factor} "
+            f"{self.total_capacity}GB {self.speed_mhz}MHz {self.cl_tier}"
+        )
 
     def to_dict(self) -> dict:
         return {
@@ -37,7 +63,13 @@ class ValueScore:
             "capacity_gb": self.capacity_gb,
             "kit_count": self.kit_count,
             "speed_mhz": self.speed_mhz,
+            "cl_latency": self.cl_latency,
+            "die_type": self.die_type,
             "memory_type": self.memory_type,
+            "form_factor": self.form_factor,
+            "total_capacity": self.total_capacity,
+            "cl_tier": self.cl_tier,
+            "group_key": self.group_key,
             "final_fen": self.final_fen,
             "recommendation": self.recommendation,
         }
@@ -90,13 +122,37 @@ class ValueRanker:
                 capacity_gb=p.get("capacity_gb", 0),
                 kit_count=p.get("kit_count", 1),
                 speed_mhz=p.get("speed_mhz", 0),
+                cl_latency=p.get("cl_latency"),
+                die_type=p.get("die_type"),
                 memory_type=p.get("memory_type", ""),
+                form_factor=p.get("form_factor", ""),
                 final_fen=p.get("final_fen", 0),
                 recommendation=trend.recommendation if trend else "wait",
             ))
 
         results.sort(key=lambda x: x.score, reverse=True)
         return results
+
+    @staticmethod
+    def group_rank(rankings: list[ValueScore], min_group_size: int = 3) -> dict[str, list[ValueScore]]:
+        """按规格组合分组，组内按价格升序排名。
+
+        分组维度：内存类型 + 外形 + 总容量 + 频率 + CL档位。
+        只保留商品数 ≥ min_group_size 的组。
+        """
+        groups: dict[str, list[ValueScore]] = {}
+        for r in rankings:
+            groups.setdefault(r.group_key, []).append(r)
+
+        # 组内按价格从低到高排序
+        for key in groups:
+            groups[key].sort(key=lambda x: x.final_fen if x.final_fen > 0 else 9999999)
+
+        # 过滤小组，按组内平均价格排序
+        filtered = {
+            k: v for k, v in groups.items() if len(v) >= min_group_size
+        }
+        return dict(sorted(filtered.items()))
 
     @staticmethod
     def _calc_price_score(price_fen: int, min_price: int, price_range: int) -> float:

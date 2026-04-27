@@ -100,45 +100,85 @@ class TestValueRanker:
         s = ValueScore(
             product_id=1, score=85.0, price_score=35.0, spec_score=35.0, trend_score=15.0,
             brand="G.Skill", model="Trident", title="Test", capacity_gb=16, kit_count=2,
-            speed_mhz=6000, memory_type="DDR5", final_fen=50000, recommendation="watch",
+            speed_mhz=6000, cl_latency=30, memory_type="DDR5", form_factor="DIMM",
+            final_fen=50000, recommendation="watch",
         )
         d = s.to_dict()
         assert d["score"] == 85.0
         assert d["brand"] == "G.Skill"
+        assert d["form_factor"] == "DIMM"
+        assert d["total_capacity"] == 32
+        assert d["cl_tier"] == "CL28-30"
+        assert "DDR5 DIMM 32GB 6000MHz CL28-30" in d["group_key"]
+
+    def test_group_rank(self):
+        products = [
+            ValueScore(product_id=1, score=85.0, price_score=35.0, spec_score=35.0, trend_score=15.0,
+                       brand="G.Skill", model="Trident", title="t1", capacity_gb=16, kit_count=2,
+                       speed_mhz=6000, cl_latency=30, memory_type="DDR5", form_factor="DIMM",
+                       final_fen=50000, recommendation="watch"),
+            ValueScore(product_id=2, score=80.0, price_score=30.0, spec_score=35.0, trend_score=15.0,
+                       brand="Corsair", model="Vengeance", title="t2", capacity_gb=16, kit_count=2,
+                       speed_mhz=6000, cl_latency=28, memory_type="DDR5", form_factor="DIMM",
+                       final_fen=45000, recommendation="watch"),
+            # Different spec group
+            ValueScore(product_id=3, score=75.0, price_score=25.0, spec_score=35.0, trend_score=15.0,
+                       brand="Crucial", model="CT16G", title="t3", capacity_gb=16, kit_count=1,
+                       speed_mhz=4800, cl_latency=42, memory_type="DDR5", form_factor="DIMM",
+                       final_fen=30000, recommendation="wait"),
+        ]
+        grouped = ValueRanker.group_rank(products, min_group_size=2)
+        # group of 2 (6000MHz CL28-30) should be present
+        assert len(grouped) == 1
+        group_key = "DDR5 DIMM 32GB 6000MHz CL28-30"
+        assert group_key in grouped
+        # Cheaper product (Corsair, 45000) should be first
+        assert grouped[group_key][0].brand == "Corsair"
+        assert grouped[group_key][1].brand == "G.Skill"
+        # 1-product group (4800MHz CL42+) should be filtered out
+
+    def test_group_rank_min_size(self):
+        products = [
+            ValueScore(product_id=1, score=85.0, price_score=35.0, spec_score=35.0, trend_score=15.0,
+                       brand="G.Skill", model="Trident", title="t1", capacity_gb=16, kit_count=2,
+                       speed_mhz=6000, cl_latency=30, memory_type="DDR5", form_factor="DIMM",
+                       final_fen=50000, recommendation="watch"),
+        ]
+        grouped = ValueRanker.group_rank(products, min_group_size=3)
+        assert len(grouped) == 0  # single product filtered out
+
+
+def _make_test_group() -> dict:
+    """Helper: create a single-group dict for report tests."""
+    r = ValueScore(product_id=1, score=90.0, price_score=35.0, spec_score=35.0, trend_score=20.0,
+                   brand="G.Skill", model="Trident", title="t1", capacity_gb=16, kit_count=2,
+                   speed_mhz=6000, memory_type="DDR5", form_factor="DIMM", cl_latency=30,
+                   final_fen=50000, recommendation="buy_now")
+    return {r.group_key: [r]}
 
 
 class TestReportGenerator:
     def test_to_json(self):
-        rankings = [
-            ValueScore(product_id=1, score=90.0, price_score=35.0, spec_score=35.0, trend_score=20.0,
-                       brand="G.Skill", model="Trident", title="t1", capacity_gb=16, kit_count=2,
-                       speed_mhz=6000, memory_type="DDR5", final_fen=50000, recommendation="buy_now"),
-        ]
-        json_str = ReportGenerator.to_json(rankings)
+        grouped = _make_test_group()
+        json_str = ReportGenerator.to_json(grouped)
         assert "buy_now" in json_str
         assert "G.Skill" in json_str
+        assert "groups" in json_str
 
     def test_to_markdown(self):
-        rankings = [
-            ValueScore(product_id=1, score=90.0, price_score=35.0, spec_score=35.0, trend_score=20.0,
-                       brand="G.Skill", model="Trident", title="t1", capacity_gb=16, kit_count=2,
-                       speed_mhz=6000, memory_type="DDR5", final_fen=50000, recommendation="buy_now"),
-        ]
-        md = ReportGenerator.to_markdown(rankings)
+        grouped = _make_test_group()
+        md = ReportGenerator.to_markdown(grouped)
         assert "性价比排名" in md
         assert "G.Skill" in md
         assert "¥500.00" in md
+        assert "CL30" in md
 
     def test_to_markdown_empty(self):
-        md = ReportGenerator.to_markdown([])
+        md = ReportGenerator.to_markdown({})
         assert "暂无数据" in md
 
     def test_to_feishu_card(self):
-        rankings = [
-            ValueScore(product_id=1, score=90.0, price_score=35.0, spec_score=35.0, trend_score=20.0,
-                       brand="G.Skill", model="Trident", title="t1", capacity_gb=16, kit_count=2,
-                       speed_mhz=6000, memory_type="DDR5", final_fen=50000, recommendation="buy_now"),
-        ]
-        card = ReportGenerator.to_feishu_card(rankings, top_n=3)
+        grouped = _make_test_group()
+        card = ReportGenerator.to_feishu_card(grouped, top_n=3)
         assert "G.Skill" in card
         assert "建议购入" in card

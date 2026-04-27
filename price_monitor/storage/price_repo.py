@@ -89,6 +89,8 @@ class PriceRepository:
                 rs.speed_mhz,
                 rs.memory_type,
                 rs.cl_latency,
+                rs.form_factor,
+                rs.die_type,
                 l.price_fen,
                 l.final_fen
             FROM latest l
@@ -120,8 +122,10 @@ class PriceRepository:
                 "speed_mhz": row[7],
                 "memory_type": row[8],
                 "cl_latency": row[9],
-                "price_fen": row[10],
-                "final_fen": row[11],
+                "form_factor": row[10],
+                "die_type": row[11],
+                "price_fen": row[12],
+                "final_fen": row[13],
             }
             for row in result
         ]

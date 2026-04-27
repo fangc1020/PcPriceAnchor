@@ -150,5 +150,6 @@ class ProductRepository:
                 "total_gb": ram_spec.capacity_gb * ram_spec.kit_count,
                 "speed_mhz": ram_spec.speed_mhz,
                 "memory_type": ram_spec.memory_type,
+                "die_type": ram_spec.die_type,
             } if ram_spec else None,
         }

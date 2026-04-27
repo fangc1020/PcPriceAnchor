@@ -162,6 +162,7 @@ DIE_TITLES = [
     ("光威 DDR5 6000 32G 16×2 龙武 海力士M-die", "Hynix M-die"),
     ("芝奇 DDR4 3600MHz 32GB(16G×2) CL16-19-19-39 幻光戟 B-die", "Samsung B-die"),
     ("阿斯加特 女武神 DDR5 6800MHz 32GB(16G×2) CL34 A-die", "Hynix A-die"),
+    ("光威 DDR5 6000 32G 16×2 长鑫颗粒 国产", "CXMT"),
 ]
 
 

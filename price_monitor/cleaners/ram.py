@@ -22,15 +22,15 @@ DDR4_PATTERN = re.compile(r"(?i)\bddr4\b")
 # 顺序重要：先匹配 per×count 格式（中文常见），再匹配 count×per 格式
 CAPACITY_KIT_PATTERNS: list[tuple[re.Pattern, int, int]] = [
     # "16G×2" or "32GB×2" or "16×2" — per × count (most common in Chinese titles)
-    (re.compile(r"(\d+)\s*(?:GB?)?\s*[×xX]\s*(\d+)\b"), 0, 1),
+    (re.compile(r"(\d+)\s*(?:GB?)?\s*[×xX*]\s*(\d+)\b"), 0, 1),
     # "2×32GB" — count × per (GB attached to second number)
-    (re.compile(r"(\d+)\s*[×xX]\s*(\d+)\s*GB\b"), 1, 0),
-    # "64GB(2×32GB)" → per_stick=group 2, count=group 1
-    (re.compile(r"(\d+)\s*GB\s*\(\s*(\d+)\s*[×xX]\s*(\d+)\s*GB?\s*\)"), 2, 1),
+    (re.compile(r"(\d+)\s*[×xX*]\s*(\d+)\s*GB\b"), 1, 0),
+    # "64GB(2×32GB)" or "96G(48G*2)" → per_stick=group 2, count=group 1
+    (re.compile(r"(\d+)\s*GB?\s*\(\s*(\d+)\s*[×xX*]\s*(\d+)\s*GB?\s*\)"), 2, 1),
 ]
 
 # 简单容量：无套装信息
-CAPACITY_SIMPLE = re.compile(r"(\d+)\s*GB?\b")
+CAPACITY_SIMPLE = re.compile(r"\b(\d+)\s*GB?\b")
 
 # --- 频率解析 ---
 SPEED_PATTERN = re.compile(r"(\d{4,5})\s*(?:MHz|mhz|MT/s|MTS)?")
@@ -50,15 +50,17 @@ RGB_PATTERN = re.compile(r"(?i)(rgb|argb|幻锋|幻光|灯条|灯)")
 XMP_PATTERN = re.compile(r"(?i)\bXMP\s*(\d+\.?\d*)?\b")
 EXPO_PATTERN = re.compile(r"(?i)\bEXPO\b")
 
-# --- 颗粒型号关键词库 ---
+# --- 颗粒厂商+型号关键词库 ---
+# 同时覆盖厂家级别和颗粒型号级别，按匹配优先级排列（具体 > 泛称）
 DIE_KEYWORDS: dict[str, list[str]] = {
-    "Samsung B-die": ["b-die", "b die", "bdie", "三星bdie", "三星b-die"],
+    "Samsung B-die": ["三星bdie", "三星b-die", "三星b die", "b-die", "b die", "bdie"],
     "Samsung": ["三星", "samsung"],
-    "Hynix M-die": ["m-die", "m die", "mdie", "海力士mdie", "海力士m-die"],
-    "Hynix A-die": ["a-die", "a die", "adie", "海力士adie", "海力士a-die"],
+    "Hynix A-die": ["海力士adie", "海力士a-die", "a-die", "a die", "adie"],
+    "Hynix M-die": ["海力士mdie", "海力士m-die", "m-die", "m die", "mdie"],
     "SK Hynix": ["海力士", "hynix", "sk hynix", "skhynix"],
     "Micron": ["镁光", "micron", "美光"],
     "Nanya": ["南亚", "nanya"],
+    "CXMT": ["长鑫", "cxmt"],
 }
 
 SPEC_BRAND_KEYWORDS = [
@@ -117,6 +119,22 @@ class RamCleaner(BaseCleaner):
             return False
         if not product.brand or not product.model:
             return False
+
+        # DDR5 JEDEC minimum is 4800 MT/s; DDR4 practical ceiling ~5000
+        if product.spec.memory_type == "DDR5" and product.spec.speed_mhz < 4000:
+            return False
+        if product.spec.memory_type == "DDR4" and product.spec.speed_mhz > 5000:
+            return False
+
+        # Per-stick capacity sanity: 4-64 GB (exclude server DIMMs and parse errors)
+        per_stick = (
+            product.spec.capacity_gb / product.spec.kit_count
+            if product.spec.kit_count > 0
+            else product.spec.capacity_gb
+        )
+        if per_stick < 4 or per_stick > 64:
+            return False
+
         return True
 
     def _parse_ram_spec(self, title: str) -> RamSpec | None:
@@ -283,7 +301,6 @@ class RamCleaner(BaseCleaner):
                 "original_fen": raw.original_fen,
                 "coupon_fen": raw.coupon_fen,
                 "promotion_tag": raw.promotion_tag,
-                "crawled_at": raw.crawled_at.isoformat(),
             },
             sort_keys=True,
         )
