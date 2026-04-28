@@ -12,6 +12,9 @@ dependencies = [
     "apscheduler>=3.10",
     "pyyaml>=6.0",
     "alembic>=1.13",
+    "openpyxl>=3.0",
+    "jinja2>=3.0",
+    "plotly>=5.0",
 ]
 
 [project.optional-dependencies]

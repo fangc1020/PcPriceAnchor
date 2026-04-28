@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ title }}</title>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --border: #2a2d3a;
+    --text: #e4e6ef;
+    --muted: #8b8fa3;
+    --accent: #00d4aa;
+    --up: #00d4aa;
+    --down: #ff6b6b;
+    --buy: #00d4aa;
+    --watch: #ffd93d;
+    --wait: #8b8fa3;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans SC", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    padding: 24px;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+
+  header {
+    text-align: center;
+    padding: 32px 0 24px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 32px;
+  }
+
+  header h1 {
+    font-size: 28px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    background: linear-gradient(135deg, var(--accent), #4dc9f6);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  header .meta {
+    color: var(--muted);
+    font-size: 14px;
+  }
+
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px;
+    margin-bottom: 32px;
+  }
+
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+  }
+
+  .stat-card .value {
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--accent);
+  }
+
+  .stat-card .label {
+    font-size: 13px;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+
+  .chart-container {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 32px;
+  }
+
+  .chart-container h2 {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 16px;
+    color: var(--text);
+  }
+
+  .group-section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    margin-bottom: 32px;
+    overflow: hidden;
+  }
+
+  .group-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .group-header:hover { background: rgba(255,255,255,0.02); }
+
+  .group-header h3 {
+    font-size: 17px;
+    font-weight: 600;
+  }
+
+  .group-header .badge {
+    background: var(--accent);
+    color: #0f1117;
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .group-body { padding: 16px 24px; }
+
+  .group-chart {
+    height: 200px;
+    margin-bottom: 20px;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  thead th {
+    text-align: left;
+    padding: 10px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    user-select: none;
+  }
+
+  thead th:hover { color: var(--text); }
+
+  thead th .sort-icon { margin-left: 4px; opacity: 0.3; }
+
+  tbody td {
+    padding: 10px 12px;
+    font-size: 14px;
+    border-bottom: 1px solid rgba(42,45,58,0.5);
+  }
+
+  .product-row {
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+
+  .product-row:hover { background: rgba(0,212,170,0.05); }
+
+  .product-row.expanded { background: rgba(0,212,170,0.08); }
+
+  .brand { font-weight: 600; color: var(--text); }
+  .model { color: var(--muted); max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .price { font-weight: 700; color: var(--accent); white-space: nowrap; }
+  .price .unit { font-weight: 400; color: var(--muted); font-size: 12px; }
+
+  .trend-tag {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .trend-falling { background: rgba(0,212,170,0.15); color: var(--up); }
+  .trend-rising { background: rgba(255,107,107,0.15); color: var(--down); }
+  .trend-stable { background: rgba(139,143,163,0.15); color: var(--muted); }
+
+  .rec-tag {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .rec-buy { background: rgba(0,212,170,0.15); color: var(--buy); }
+  .rec-watch { background: rgba(255,217,61,0.15); color: var(--watch); }
+  .rec-wait { background: rgba(139,143,163,0.15); color: var(--wait); }
+
+  .detail-cell { padding: 0 !important; }
+  .detail-chart { height: 280px; }
+
+  .no-data {
+    text-align: center;
+    padding: 40px;
+    color: var(--muted);
+  }
+
+  footer {
+    text-align: center;
+    padding: 24px;
+    color: var(--muted);
+    font-size: 12px;
+    border-top: 1px solid var(--border);
+    margin-top: 32px;
+  }
+
+  @media (max-width: 768px) {
+    body { padding: 12px; }
+    .model { max-width: 140px; }
+    .group-chart { height: 150px; }
+    .detail-chart { height: 220px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🛒 内存条价格趋势报告</h1>
+  <div class="meta">生成时间：{{ generated_at }}</div>
+</header>
+
+<div class="stats-row">
+  <div class="stat-card">
+    <div class="value">{{ stats.total_products }}</div>
+    <div class="label">商品总数</div>
+  </div>
+  <div class="stat-card">
+    <div class="value">{{ stats.total_groups }}</div>
+    <div class="label">规格组</div>
+  </div>
+  <div class="stat-card">
+    <div class="value">{{ stats.date_range }}</div>
+    <div class="label">数据跨度</div>
+  </div>
+  <div class="stat-card">
+    <div class="value">{{ stats.platforms }}</div>
+    <div class="label">平台</div>
+  </div>
+</div>
+
+{% if overview_json %}
+<div class="chart-container">
+  <h2>规格组均价走势概览</h2>
+  <div id="overview-chart" style="height:420px"></div>
+</div>
+{% endif %}
+
+{% for group in groups %}
+<section class="group-section">
+  <div class="group-header" onclick="toggleGroup(this)">
+    <h3>{{ group.key }}</h3>
+    <span class="badge">{{ group.count }} 款</span>
+  </div>
+  <div class="group-body">
+    {% if group.chart_json %}
+    <div class="group-chart" id="group-chart-{{ loop.index }}"></div>
+    {% endif %}
+    <table>
+      <thead>
+        <tr>
+          <th>品牌</th>
+          <th>型号</th>
+          <th>颗粒</th>
+          <th>时序</th>
+          <th>到手价</th>
+          <th>趋势</th>
+          <th>建议</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in group.products %}
+        <tr class="product-row"
+            data-pid="{{ p.product_id }}"
+            data-chart-id="product-chart-{{ p.product_id }}"
+            data-chart-loaded="false"
+            onclick="toggleProductChart(this)">
+          <td class="brand">{{ p.brand }}</td>
+          <td class="model" title="{{ p.title }}">{{ p.model }}</td>
+          <td>{{ p.die_type or '-' }}</td>
+          <td>{{ p.cl_str }}</td>
+          <td class="price">¥{{ p.price_yuan }}</td>
+          <td><span class="trend-tag trend-{{ p.trend_signal }}">{{ p.trend_label }}</span></td>
+          <td><span class="rec-tag rec-{{ p.recommendation }}">{{ p.rec_label }}</span></td>
+        </tr>
+        <tr class="detail-row" style="display:none">
+          <td colspan="7" class="detail-cell">
+            <div class="detail-chart" id="product-chart-{{ p.product_id }}"></div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endfor %}
+
+<footer>
+  PcPriceAnchor · 数据来源：京东 · 仅参考，不构成购买建议
+</footer>
+
+<script>
+// All product price histories, keyed by product_id
+const productHistories = {{ product_histories_json|safe }};
+
+// Overview chart
+{% if overview_json %}
+(function() {
+  const config = {{ overview_json|safe }};
+  Plotly.newPlot('overview-chart', config.data, config.layout || {}, {
+    responsive: true,
+    displayModeBar: false,
+    displaylogo: false,
+  });
+})();
+{% endif %}
+
+// Group mini charts
+{% for group in groups %}
+{% if group.chart_json %}
+(function() {
+  const config = {{ group.chart_json|safe }};
+  Plotly.newPlot('group-chart-{{ loop.index }}', config.data, config.layout || {}, {
+    responsive: true,
+    displayModeBar: false,
+    displaylogo: false,
+  });
+})();
+{% endif %}
+{% endfor %}
+
+// Row click → expand product chart
+function toggleProductChart(row) {
+  const detailRow = row.nextElementSibling;
+  if (!detailRow || !detailRow.classList.contains('detail-row')) return;
+
+  const pid = row.dataset.pid;
+  const chartId = row.dataset.chartId;
+  const isLoaded = row.dataset.chartLoaded === 'true';
+
+  if (detailRow.style.display === 'none') {
+    detailRow.style.display = 'table-row';
+    row.classList.add('expanded');
+
+    if (!isLoaded) {
+      const history = productHistories[pid];
+      if (history && history.length > 0) {
+        const dates = history.map(h => h.bucket).reverse();
+        const avgs = history.map(h => h.avg_fen / 100).reverse();
+        const mins = history.map(h => h.min_fen / 100).reverse();
+        const maxs = history.map(h => h.max_fen / 100).reverse();
+        const allTimeLow = Math.min(...mins);
+
+        const tracePrice = {
+          x: dates, y: avgs,
+          type: 'scatter', mode: 'lines+markers',
+          name: '均价', line: { color: '#00d4aa', width: 2 },
+          marker: { size: 4, color: '#00d4aa' },
+        };
+        const traceRange = {
+          x: dates.concat(dates.slice().reverse()),
+          y: maxs.concat(mins.slice().reverse()),
+          type: 'scatter', fill: 'toself', fillcolor: 'rgba(0,212,170,0.1)',
+          line: { width: 0 }, name: '波动范围', showlegend: false,
+          hoverinfo: 'skip',
+        };
+        const traceLow = {
+          x: [dates[0], dates[dates.length-1]],
+          y: [allTimeLow, allTimeLow],
+          type: 'scatter', mode: 'lines',
+          name: '历史低点 ¥' + allTimeLow.toFixed(0),
+          line: { color: '#ff6b6b', width: 1, dash: 'dot' },
+        };
+        Plotly.newPlot(chartId, [traceRange, tracePrice, traceLow], {
+          margin: { l: 48, r: 16, t: 12, b: 32 },
+          height: 280,
+          paper_bgcolor: 'rgba(0,0,0,0)',
+          plot_bgcolor: 'rgba(0,0,0,0)',
+          font: { color: '#8b8fa3', size: 11 },
+          xaxis: { gridcolor: 'rgba(42,45,58,0.5)', showgrid: true, dtick: 'D' },
+          yaxis: { gridcolor: 'rgba(42,45,58,0.5)', showgrid: true,
+                   title: '¥', zeroline: false },
+          showlegend: true,
+          legend: { orientation: 'h', y: 1.15, font: { size: 10 } },
+          hovermode: 'x unified',
+        }, { responsive: true, displayModeBar: false, displaylogo: false });
+      }
+      row.dataset.chartLoaded = 'true';
+    }
+  } else {
+    detailRow.style.display = 'none';
+    row.classList.remove('expanded');
+  }
+}
+
+// Group collapse/expand
+function toggleGroup(header) {
+  const body = header.nextElementSibling;
+  if (body.style.display === 'none') {
+    body.style.display = 'block';
+  } else {
+    body.style.display = 'none';
+  }
+}
+</script>
+</body>
+</html>

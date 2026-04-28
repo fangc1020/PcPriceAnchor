@@ -3,18 +3,17 @@
 import argparse
 import asyncio
 import logging
-import sys
 from datetime import datetime
 from pathlib import Path
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
-from price_monitor.config.settings import settings
-from price_monitor.crawlers.jd.search import JdSearchCrawler
-from price_monitor.crawlers.jd.playwright_search import JdSearchPlaywrightCrawler
-from price_monitor.crawlers.jd.stealth_crawler import JdStealthCrawler
-from price_monitor.crawlers.jd.cdp_crawler import JdCdpCrawler
 from price_monitor.cleaners.ram import RamCleaner
+from price_monitor.config.settings import settings
+from price_monitor.crawlers.jd.cdp_crawler import JdCdpCrawler
+from price_monitor.crawlers.jd.playwright_search import JdSearchPlaywrightCrawler
+from price_monitor.crawlers.jd.search import JdSearchCrawler
+from price_monitor.crawlers.jd.stealth_crawler import JdStealthCrawler
 from price_monitor.scheduler.tasks import CrawlTask
 
 logging.basicConfig(
@@ -70,11 +69,13 @@ async def run_once(
 
 async def run_analysis() -> None:
     """单次分析：查当前最低价商品 + 趋势 + 排名 + 输出报告。"""
-    from price_monitor.db.session import async_session
-    from price_monitor.storage.price_repo import PriceRepository
+    import webbrowser
+
+    from price_monitor.analysis.report import ReportGenerator
     from price_monitor.analysis.trend import TrendAnalyzer
     from price_monitor.analysis.value_rank import ValueRanker
-    from price_monitor.analysis.report import ReportGenerator
+    from price_monitor.db.session import async_session
+    from price_monitor.storage.price_repo import PriceRepository
 
     async with async_session() as session:
         price_repo = PriceRepository(session)
@@ -84,10 +85,14 @@ async def run_analysis() -> None:
             logger.info("No products found for analysis.")
             return
 
+        # Batch-fetch price histories (avoids N+1 queries)
+        pids = [p["id"] for p in products]
+        price_histories = await price_repo.get_price_history_batch(pids)
+
         analyzer = TrendAnalyzer()
         trends = []
         for p in products:
-            history = await price_repo.get_price_history(p["id"])
+            history = price_histories.get(p["id"], [])
             trend = analyzer.analyze(history)
             trend.product_id = p["id"]
             trends.append(trend)
@@ -110,7 +115,17 @@ async def run_analysis() -> None:
         (reports_dir / f"report_{date_str}.md").write_text(md, encoding="utf-8")
         (reports_dir / f"report_{date_str}.json").write_text(json_str, encoding="utf-8")
         ReportGenerator.to_excel(grouped, reports_dir / f"report_{date_str}.xlsx")
-        logger.info("Reports saved to reports/report_%s.{md,json,xlsx}", date_str)
+
+        # HTML report with Plotly charts
+        html = ReportGenerator.to_html(grouped, price_histories, trends)
+        html_path = reports_dir / f"report_{date_str}.html"
+        html_path.write_text(html, encoding="utf-8")
+        logger.info("HTML report saved to %s", html_path)
+
+        logger.info("Reports saved to reports/report_%s.{md,json,xlsx,html}", date_str)
+
+        # Open in browser
+        webbrowser.open(f"file://{html_path.resolve()}")
 
         # Optionally push to Feishu
         if settings.feishu_webhook_url:
@@ -119,6 +134,7 @@ async def run_analysis() -> None:
 
 async def _send_feishu(grouped) -> None:
     import httpx
+
     from price_monitor.analysis.report import ReportGenerator
 
     card = ReportGenerator.to_feishu_card(grouped)

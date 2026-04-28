@@ -1,10 +1,9 @@
 import logging
-from datetime import datetime, timezone
 
-from sqlalchemy import select, func, text
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from price_monitor.models import PriceTick, Product, Platform
+from price_monitor.models import PriceTick
 
 logger = logging.getLogger(__name__)
 
@@ -14,11 +13,12 @@ class PriceRepository:
         self._session = session
 
     async def record_price(self, product_id: int, clean_product) -> bool:
-        """写入价格 tick。raw_hash 已存在则跳过，返回 False；写入成功返回 True。"""
+        """写入价格 tick。同日同 raw_hash 跳过，跨日重新记录以积累趋势数据。"""
         existing = await self._session.execute(
             select(PriceTick.id).where(
                 PriceTick.product_id == product_id,
                 PriceTick.raw_hash == clean_product.raw_hash,
+                func.date(PriceTick.recorded_at) == func.current_date(),
             ).limit(1)
         )
         if existing.scalar_one_or_none() is not None:
@@ -60,6 +60,34 @@ class PriceRepository:
             }
             for row in result
         ]
+
+    async def get_price_history_batch(
+        self, product_ids: list[int], days: int = 14
+    ) -> dict[int, list[dict]]:
+        """批量查询价格历史，返回 {product_id: [records]} 映射。"""
+        if not product_ids:
+            return {}
+        result = await self._session.execute(
+            text("""
+                SELECT product_id, bucket, min_final_fen, max_final_fen, avg_final_fen, tick_count
+                FROM price_hourly
+                WHERE product_id = ANY(:pids)
+                  AND bucket >= NOW() - make_interval(days => :days)
+                ORDER BY product_id, bucket DESC
+            """),
+            {"pids": product_ids, "days": days},
+        )
+        history: dict[int, list[dict]] = {}
+        for row in result:
+            pid = row[0]
+            history.setdefault(pid, []).append({
+                "bucket": row[1].isoformat() if row[1] else None,
+                "min_final_fen": float(row[2]) if row[2] is not None else 0,
+                "max_final_fen": float(row[3]) if row[3] is not None else 0,
+                "avg_final_fen": float(row[4]) if row[4] is not None else 0,
+                "tick_count": row[5],
+            })
+        return history
 
     async def get_current_lowest(
         self, category: str, filters: dict | None = None
