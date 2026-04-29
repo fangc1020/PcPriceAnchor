@@ -72,7 +72,17 @@ python -m price_monitor.main scheduler   # periodic crawl (every 120 min)
 
 ### Status & Next Steps
 
-MVP 全链路已于 2026-04-27 验证通过。248 tests passing。2026-04-29 新增 HTML 交互报告（Plotly 图表 + 深色主题）。GitHub: https://github.com/fangc1020/PcPriceAnchor
+MVP 全链路已于 2026-04-27 验证通过。249 tests passing。2026-04-29 完成报告系统大改。GitHub: https://github.com/fangc1020/PcPriceAnchor
+
+**2026-04-29 更新**：
+- 数据不足（<7天）降级为"📊积累中 X/7天"，不再误报买入
+- CL 时序覆盖率 40% → 78%：正则同时匹配 `C30`/`CL30` 两种写法，回填 126 条
+- 装机视角过滤：排除 OEM 裸条/笔记本内存/工控/服务器/拆机件，332 → 100 条有价值商品
+- 首发延迟 FWL（CL×2000/频率 ns）+ 性能档位标签（旗舰/高性能/主流/入门）
+- 表格新增列：类型(DIMM/SO-DIMM)、FWL、性能档位、¥/GB、品牌分档
+- 总览图新增规格组筛选器 + Y 轴自适应按钮
+- 品牌分档：`config/brand_tiers.yml`（一线/国产/其他）
+- 笔记本关键词识别：`笔记本/笔电/notebook/laptop/天选/枪神` → SO-DIMM
 
 **日常操作**：
 - 爬取前确认 Chrome CDP 在 9222 端口、Docker PostgreSQL 在运行
@@ -80,20 +90,12 @@ MVP 全链路已于 2026-04-27 验证通过。248 tests passing。2026-04-29 新
 - `python -m price_monitor.main analyze` 分析 + 生成 HTML 报告 + 自动打开浏览器
 - 连续聚合 `price_hourly` 每 30 分钟自动刷新，如需立即看结果手动 `docker exec -e PGPASSWORD=password price_monitor_db psql -U user -d price_monitor -c "CALL refresh_continuous_aggregate('price_hourly', NULL, NULL);"`
 
-**当前数据状态**：仅 2-3 天价格历史，趋势分析参考价值有限（大部分显示"🔥购入"因为当前价=历史最低）。持续积累到 7 天以上趋势才可靠。
+**当前数据状态**：仅 2-3 天价格历史（75 款有效商品，9 个规格组），趋势分析全显示"积累中"。持续积累到 7 天以上才可靠。需定期 `python -m price_monitor.main once` 爬取积累数据。
 
 **已知问题**：
-- CL 时序覆盖率仅 ~40%，多数商品标注"CL未知"
-- 中文"笔记本"关键词未识别为 SO-DIMM
-- CPU 型号（如 9800X3D）可能被误识别为内存频率
+- CPU 型号（如 9800X3D）可能被误识别为内存频率（威刚标题"适配9800X3D" → 9800MHz）
+- 部分消费品牌的品牌名解析不干净（如"金百达16G/32GB/64G"应只取"金百达"）
 - DB 时区已切为 Asia/Shanghai，但 `recorded_at` 默认值为 `func.now()` 依赖 session 时区
-
-**下一批待办（用户反馈）**：
-- P0: 数据不足时降级建议为"数据积累中 X/7天"（当前全显示买入）
-- P0: 跨规格组总榜（按性价比分综合排名，不限于组内）
-- P1: 表格加 DIMM/SO-DIMM 类型列
-- P1: 总览图加规格组筛选器 + Y 轴自适应
-- P1: 加 ¥/GB 单价列
-- P2: 品牌分档标记（一线/国产/杂牌）
+- 约 22% 商品 CL 仍未知（FURY 基础款等标题不标时序），需爬详情页参数表补全
 
 **多平台扩展**：淘宝/天猫（需滑块）、拼多多（App 内嵌浏览器）。

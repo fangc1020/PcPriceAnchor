@@ -1,9 +1,9 @@
 """性价比评分与排名 — 综合价格、规格、趋势三维度评分。"""
 
-from dataclasses import dataclass, field
-from typing import List
+from dataclasses import dataclass
 
 from price_monitor.analysis.trend import TrendResult
+from price_monitor.cleaners.normalizer import brand_tiers
 
 
 @dataclass
@@ -26,10 +26,18 @@ class ValueScore:
     form_factor: str = ""
     final_fen: int = 0
     recommendation: str = ""
+    brand_tier: str = "其他"
 
     @property
     def total_capacity(self) -> int:
         return self.capacity_gb * self.kit_count
+
+    @property
+    def price_per_gb(self) -> float:
+        """每 GB 单价（元）。"""
+        if self.total_capacity <= 0:
+            return 0.0
+        return self.final_fen / 100 / self.total_capacity
 
     @property
     def cl_tier(self) -> str:
@@ -42,6 +50,30 @@ class ValueScore:
         if self.cl_latency <= 40:
             return "CL38-40"
         return "CL42+"
+
+    @property
+    def fwl_ns(self) -> float | None:
+        """首发延迟 (First Word Latency) = CL × 2000 / 频率 ns，越低越快。"""
+        if self.cl_latency and self.speed_mhz > 0:
+            return round(self.cl_latency * 2000 / self.speed_mhz, 1)
+        return None
+
+    @property
+    def performance_tier(self) -> str:
+        """性能档位：基于频率 + CL 综合评定。"""
+        if not self.cl_latency or self.speed_mhz < 5200:
+            return "入门"
+        if self.speed_mhz >= 7200:
+            return "旗舰"
+        if self.speed_mhz >= 6400 and self.cl_latency <= 30:
+            return "旗舰"
+        if self.speed_mhz >= 6000 and self.cl_latency <= 32:
+            return "高性能"
+        if self.speed_mhz >= 6000 and self.cl_latency <= 36:
+            return "主流"
+        if self.speed_mhz >= 5600:
+            return "入门"
+        return "入门"
 
     @property
     def group_key(self) -> str:
@@ -68,10 +100,14 @@ class ValueScore:
             "memory_type": self.memory_type,
             "form_factor": self.form_factor,
             "total_capacity": self.total_capacity,
+            "price_per_gb": round(self.price_per_gb, 2),
             "cl_tier": self.cl_tier,
             "group_key": self.group_key,
             "final_fen": self.final_fen,
             "recommendation": self.recommendation,
+            "brand_tier": self.brand_tier,
+            "fwl_ns": self.fwl_ns,
+            "performance_tier": self.performance_tier,
         }
 
 
@@ -110,13 +146,14 @@ class ValueRanker:
             trend_score = ValueRanker._calc_trend_score(trend)
             score = price_score + spec_score + trend_score
 
+            brand = p.get("brand", "")
             results.append(ValueScore(
                 product_id=pid,
                 score=score,
                 price_score=price_score,
                 spec_score=spec_score,
                 trend_score=trend_score,
-                brand=p.get("brand", ""),
+                brand=brand,
                 model=p.get("model", ""),
                 title=p.get("title", ""),
                 capacity_gb=p.get("capacity_gb", 0),
@@ -128,10 +165,25 @@ class ValueRanker:
                 form_factor=p.get("form_factor", ""),
                 final_fen=p.get("final_fen", 0),
                 recommendation=trend.recommendation if trend else "wait",
+                brand_tier=brand_tiers.resolve(brand),
             ))
 
         results.sort(key=lambda x: x.score, reverse=True)
         return results
+
+    @staticmethod
+    def overall_rank(rankings: list[ValueScore], top_n: int = 20) -> list[ValueScore]:
+        """跨规格组总榜：按综合性价比分降序排列，取前 N 名。"""
+        return sorted(rankings, key=lambda x: x.score, reverse=True)[:top_n]
+
+    @staticmethod
+    def performance_rank(rankings: list[ValueScore], top_n: int = 15) -> list[ValueScore]:
+        """纯性能榜：按频率降序 + FWL 升序（同频比延迟），无视价格。"""
+        def perf_key(r: ValueScore) -> tuple:
+            # 频率高 > 延迟低；无 CL 的排最后
+            fwl = r.fwl_ns if r.fwl_ns is not None else 999
+            return (-r.speed_mhz, fwl)
+        return sorted(rankings, key=perf_key)[:top_n]
 
     @staticmethod
     def group_rank(rankings: list[ValueScore], min_group_size: int = 3) -> dict[str, list[ValueScore]]:
@@ -202,4 +254,6 @@ class ValueRanker:
             return 20
         if trend.recommendation == "watch":
             return 15
+        if trend.recommendation == "accumulating":
+            return 12  # 数据积累中，中性偏观望
         return 5  # wait

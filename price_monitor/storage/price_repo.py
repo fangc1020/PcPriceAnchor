@@ -89,6 +89,14 @@ class PriceRepository:
             })
         return history
 
+    # 装机视角：OEM 裸条 / 工控 / 服务器 / 拆机件 无参考价值，标题级过滤
+    _OEM_TITLE_RE = (
+        r'(三星|samsung|海力士|hynix|镁光|micron)\s*[内存条]'
+        r'|工控|工业|服务器|工作站|ECC|REG|RECC'
+        r'|原装|拆机|备件|oem'
+        r'|天迪工控|戴尔|dell|惠普|hp|联想原装'
+    )
+
     async def get_current_lowest(
         self, category: str, filters: dict | None = None
     ) -> list[dict]:
@@ -96,6 +104,7 @@ class PriceRepository:
         filters = filters or {}
         memory_type = filters.get("memory_type")
         min_capacity = filters.get("min_capacity_gb", 0)
+        exclude_form_factor = filters.get("exclude_form_factor", "SO-DIMM")
 
         # Get latest price per product
         query = text("""
@@ -128,9 +137,17 @@ class PriceRepository:
             WHERE p.category = :category
               AND p.is_active = TRUE
               AND rs.capacity_gb >= :min_capacity
+              AND rs.form_factor != :exclude_form_factor
+              AND NOT (p.title ~* :oem_title_re)
+              AND NOT (p.title ~* '(笔记本|笔电|notebook|laptop|天选|枪神)')
         """)
 
-        params = {"category": category, "min_capacity": min_capacity}
+        params = {
+            "category": category,
+            "min_capacity": min_capacity,
+            "exclude_form_factor": exclude_form_factor,
+            "oem_title_re": self._OEM_TITLE_RE,
+        }
         if memory_type:
             query = text(query.text + " AND rs.memory_type = :memory_type")
             params["memory_type"] = memory_type

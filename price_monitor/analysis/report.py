@@ -27,12 +27,15 @@ class ReportGenerator:
         return json.dumps(data, ensure_ascii=False, indent=2)
 
     @staticmethod
-    def to_markdown(grouped: dict[str, list[ValueScore]]) -> str:
+    def to_markdown(
+        grouped: dict[str, list[ValueScore]],
+        overall: list[ValueScore] | None = None,
+    ) -> str:
         if not grouped:
             return "# 内存条性价比排名\n\n暂无数据。\n"
 
         lines = [
-            "# 内存条性价比排名（同规格对比）",
+            "# 内存条规格对比",
             "",
             f"> 生成时间：{datetime.now().strftime('%Y-%m-%d %H:%M')}",
             f"> 共 {len(grouped)} 个规格组",
@@ -44,18 +47,20 @@ class ReportGenerator:
             total_products += len(rankings)
             lines.append(f"## {group_key}")
             lines.append("")
-            lines.append("| 品牌 | 型号 | 颗粒 | 时序 | 到手价 | 建议 |")
-            lines.append("|------|------|------|------|--------|------|")
+            lines.append("| 品牌 | 型号 | 类型 | 颗粒 | 时序 | 到手价 | ¥/GB | 建议 |")
+            lines.append("|------|------|------|------|------|--------|------|------|")
 
             for r in rankings:
                 price_yuan = f"¥{r.final_fen / 100:.2f}"
+                ppg = f"¥{r.price_per_gb:.1f}"
                 cl_str = f"CL{r.cl_latency}" if r.cl_latency else "-"
                 die_str = r.die_type or "-"
-                rec_emoji = {"buy_now": "🔥购入", "watch": "👀观望", "wait": "⏸等待"}.get(
+                rec_emoji = {"buy_now": "🔥购入", "watch": "👀观望", "wait": "⏸等待", "accumulating": "📊积累中"}.get(
                     r.recommendation, "?"
                 )
                 lines.append(
-                    f"| {r.brand} | {r.model[:30]} | {die_str} | {cl_str} | {price_yuan} | {rec_emoji} |"
+                    f"| {r.brand} | {r.model[:30]} | {r.form_factor} | "
+                    f"{die_str} | {cl_str} | {price_yuan} | {ppg} | {rec_emoji} |"
                 )
             lines.append("")
 
@@ -76,10 +81,10 @@ class ReportGenerator:
             top=Side(style="thin"), bottom=Side(style="thin"),
         )
         data_font = Font(name="微软雅黑", size=10)
-        rec_labels = {"buy_now": "🔥建议购入", "watch": "👀观望", "wait": "⏸等待"}
+        rec_labels = {"buy_now": "🔥建议购入", "watch": "👀观望", "wait": "⏸等待", "accumulating": "📊数据积累中"}
 
-        headers = ["规格", "品牌", "型号", "颗粒", "时序", "到手价(¥)", "建议"]
-        col_widths = [32, 14, 36, 12, 10, 14, 14]
+        headers = ["规格", "品牌", "型号", "类型", "颗粒", "时序", "到手价(¥)", "¥/GB", "建议"]
+        col_widths = [32, 14, 36, 8, 12, 10, 14, 8, 14]
 
         # Write headers
         for col, h in enumerate(headers, 1):
@@ -100,9 +105,11 @@ class ReportGenerator:
                     group_key,
                     r.brand,
                     r.model[:60],
+                    r.form_factor,
                     die_str,
                     cl_str,
                     price_yuan,
+                    round(r.price_per_gb, 1),
                     rec_labels.get(r.recommendation, "⏸等待"),
                 ]
 
@@ -110,7 +117,7 @@ class ReportGenerator:
                     cell = ws.cell(row=row, column=col, value=val)
                     cell.font = data_font
                     cell.border = thin_border
-                    if col in (5, 6, 7):
+                    if col in (6, 7, 8, 9):
                         cell.alignment = Alignment(horizontal="center", vertical="center")
 
                 row += 1
@@ -121,7 +128,7 @@ class ReportGenerator:
 
         # Freeze header
         ws.freeze_panes = "A2"
-        ws.auto_filter.ref = f"A1:G{row - 1}"
+        ws.auto_filter.ref = f"A1:I{row - 1}"
 
         wb.save(filepath)
 
@@ -149,7 +156,7 @@ class ReportGenerator:
                 price_yuan = f"¥{r.final_fen / 100:.2f}"
                 cl_str = f"CL{r.cl_latency}" if r.cl_latency else ""
                 die_str = f" {r.die_type}" if r.die_type else ""
-                rec = {"buy_now": "🔥建议购入", "watch": "👀观望", "wait": "⏸等待"}.get(
+                rec = {"buy_now": "🔥建议购入", "watch": "👀观望", "wait": "⏸等待", "accumulating": "📊数据积累中"}.get(
                     r.recommendation, ""
                 )
                 elements.append({
@@ -205,6 +212,12 @@ class ReportGenerator:
             products_data = []
             for p in products:
                 trend = trend_map.get(p.product_id)
+                rec = trend.recommendation if trend else "wait"
+                data_days = trend.data_days if trend else 0
+                if rec == "accumulating":
+                    rec_label = f"📊积累中 {data_days}/7天"
+                else:
+                    rec_label = {"buy_now": "🔥建议购入", "watch": "👀观望", "wait": "⏸等待"}.get(rec, "?")
                 products_data.append({
                     "product_id": p.product_id,
                     "brand": p.brand,
@@ -212,15 +225,18 @@ class ReportGenerator:
                     "title": p.title,
                     "die_type": p.die_type,
                     "cl_str": f"CL{p.cl_latency}" if p.cl_latency else "-",
+                    "fwl_str": f"{p.fwl_ns:.1f}ns" if p.fwl_ns else "-",
+                    "perf_tier": p.performance_tier,
                     "price_yuan": f"{p.final_fen / 100:.2f}",
+                    "price_per_gb": f"{p.price_per_gb:.1f}",
+                    "form_factor": p.form_factor,
+                    "brand_tier": p.brand_tier,
                     "trend_signal": trend.trend_signal if trend else "stable",
                     "trend_label": {"falling": "⬇下跌", "rising": "⬆上涨", "stable": "→持平"}.get(
                         trend.trend_signal if trend else "stable", "?"
                     ),
-                    "recommendation": trend.recommendation if trend else "wait",
-                    "rec_label": {"buy_now": "🔥建议购入", "watch": "👀观望", "wait": "⏸等待"}.get(
-                        trend.recommendation if trend else "wait", "?"
-                    ),
+                    "recommendation": rec,
+                    "rec_label": rec_label,
                 })
 
             groups_data.append({

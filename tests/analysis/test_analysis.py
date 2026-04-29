@@ -34,16 +34,20 @@ class TestTrendAnalyzer:
         assert result.trend_signal in ("falling", "stable", "rising")
 
     def test_all_time_low_is_buy_now(self):
-        """当前价格为历史最低时应推荐 buy_now。"""
-        history = [
-            {"product_id": 1, "avg_final_fen": 40000, "min_final_fen": 40000},
-            {"product_id": 1, "avg_final_fen": 50000, "min_final_fen": 49000},
-            {"product_id": 1, "avg_final_fen": 60000, "min_final_fen": 59000},
-        ]
+        """当前价格为历史最低且数据>=7天时应推荐 buy_now。"""
+        history = []
+        for i in range(8):
+            history.append({
+                "product_id": 1,
+                "bucket": f"2026-04-{22+i:02d}T12:00:00+08:00",
+                "avg_final_fen": 40000 + i * 3000,
+                "min_final_fen": 40000 + i * 2000,
+            })
         result = self.analyzer.analyze(history)
         assert result.all_time_low_fen == 40000
         assert result.current_fen == result.all_time_low_fen
         assert result.recommendation == "buy_now"
+        assert result.data_days >= 7
 
     def test_rising_trend_should_wait(self):
         history = []
@@ -57,6 +61,21 @@ class TestTrendAnalyzer:
         result = self.analyzer.analyze(history)
         assert result.recommendation in ("wait", "watch")
 
+    def test_accumulating_when_insufficient_data(self):
+        """数据不足7天时应降级为 accumulating，即使当前是历史最低。"""
+        history = []
+        for i in range(3):
+            history.append({
+                "product_id": 1,
+                "bucket": f"2026-04-2{7+i}T12:00:00+08:00",
+                "avg_final_fen": 40000 + i * 5000,
+                "min_final_fen": 40000 + i * 3000,
+            })
+        result = self.analyzer.analyze(history)
+        assert result.data_days == 3
+        assert result.current_fen <= result.all_time_low_fen
+        assert result.recommendation == "accumulating"
+
     def test_trend_result_to_dict(self):
         result = TrendResult(
             product_id=1,
@@ -66,10 +85,12 @@ class TestTrendAnalyzer:
             drop_pct=-3.8,
             trend_signal="falling",
             recommendation="watch",
+            data_days=10,
         )
         d = result.to_dict()
         assert d["product_id"] == 1
         assert d["recommendation"] == "watch"
+        assert d["data_days"] == 10
 
 
 class TestValueRanker:
@@ -168,7 +189,7 @@ class TestReportGenerator:
     def test_to_markdown(self):
         grouped = _make_test_group()
         md = ReportGenerator.to_markdown(grouped)
-        assert "性价比排名" in md
+        assert "规格对比" in md
         assert "G.Skill" in md
         assert "¥500.00" in md
         assert "CL30" in md

@@ -36,12 +36,15 @@ CAPACITY_SIMPLE = re.compile(r"\b(\d+)\s*GB?\b")
 SPEED_PATTERN = re.compile(r"(\d{4,5})\s*(?:MHz|mhz|MT/s|MTS)?")
 
 # --- 时序解析 ---
-CL_PATTERN = re.compile(r"(?i)\bCL\s*(\d{1,3})\b")
+# JD 标题中时序通常写为 C30 / C36 / CL30 — 匹配 C 或 CL 前缀
+# 用 ASCII 字符类做边界检测，避免中文 \b 问题
+CL_PATTERN = re.compile(r"(?i)(?<![a-zA-Z])(?:CL|C)\s*(\d{2,3})(?![a-zA-Z])")
 TIMING_PATTERN = re.compile(r"(\d{1,3})\s*-\s*(\d{1,3})\s*-\s*(\d{1,3})\s*-\s*(\d{1,3})")
 
 # --- 外形 ---
 SODIMM_PATTERN = re.compile(r"(?i)\bso[-]?dimm\b")
 DIMM_PATTERN = re.compile(r"(?i)\bdimm\b")
+NOTEBOOK_PATTERN = re.compile(r"(?i)(笔记本|笔电|notebook|laptop)")
 
 # --- RGB 检测（不用 \b，中文不认单词边界）---
 RGB_PATTERN = re.compile(r"(?i)(rgb|argb|幻锋|幻光|灯条|灯)")
@@ -200,8 +203,10 @@ class RamCleaner(BaseCleaner):
         cl_latency = None
         cl_match = CL_PATTERN.search(title)
         if cl_match:
-            cl_latency = int(cl_match.group(1))
-            fields_found += 1
+            val = int(cl_match.group(1))
+            if 7 <= val <= 60:  # DDR4/DDR5 合理范围
+                cl_latency = val
+                fields_found += 1
 
         # 5. 完整时序串
         timing_string = None
@@ -212,7 +217,7 @@ class RamCleaner(BaseCleaner):
 
         # 6. 外形
         form_factor = "DIMM"
-        if SODIMM_PATTERN.search(title):
+        if SODIMM_PATTERN.search(title) or NOTEBOOK_PATTERN.search(title):
             form_factor = "SO-DIMM"
 
         # 7. RGB

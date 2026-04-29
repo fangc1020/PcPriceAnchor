@@ -199,6 +199,43 @@
   .rec-buy { background: rgba(0,212,170,0.15); color: var(--buy); }
   .rec-watch { background: rgba(255,217,61,0.15); color: var(--watch); }
   .rec-wait { background: rgba(139,143,163,0.15); color: var(--wait); }
+  .rec-accumulating { background: rgba(77,201,246,0.15); color: #4dc9f6; }
+
+  .form-factor-tag {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 11px;
+    font-weight: 600;
+    background: rgba(160,163,175,0.12);
+    color: var(--muted);
+  }
+
+  .tier-tag {
+    display: inline-block;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: 600;
+    margin-left: 4px;
+    vertical-align: middle;
+  }
+  .tier-一线 { background: rgba(0,212,170,0.15); color: var(--accent); }
+  .tier-国产 { background: rgba(255,217,61,0.15); color: var(--watch); }
+  .tier-其他 { background: rgba(139,143,163,0.1); color: var(--muted); }
+
+  .perf-tier-tag {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .perf-旗舰 { background: rgba(255,107,107,0.15); color: #ff6b6b; }
+  .perf-高性能 { background: rgba(0,212,170,0.15); color: var(--accent); }
+  .perf-主流 { background: rgba(77,201,246,0.15); color: #4dc9f6; }
+  .perf-入门 { background: rgba(139,143,163,0.1); color: var(--muted); }
 
   .detail-cell { padding: 0 !important; }
   .detail-chart { height: 280px; }
@@ -217,6 +254,20 @@
     border-top: 1px solid var(--border);
     margin-top: 32px;
   }
+
+  .filter-btn {
+    padding: 3px 10px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: transparent;
+    color: var(--muted);
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .filter-btn:hover { border-color: var(--accent); color: var(--text); }
+  .filter-btn.active { background: rgba(0,212,170,0.15); border-color: var(--accent); color: var(--accent); }
 
   @media (max-width: 768px) {
     body { padding: 12px; }
@@ -252,9 +303,123 @@
   </div>
 </div>
 
+{% if overall %}
+<section class="group-section" style="border-color: var(--accent);">
+  <div class="group-header" onclick="toggleGroup(this)">
+    <h3>🏆 综合性价比总榜（跨规格组 TOP 20）</h3>
+    <span class="badge">{{ overall|length }} 款</span>
+  </div>
+  <div class="group-body">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>品牌</th>
+          <th>型号</th>
+          <th>规格</th>
+          <th>时序</th>
+          <th>FWL</th>
+          <th>档位</th>
+          <th>到手价</th>
+          <th>¥/GB</th>
+          <th>综合分</th>
+          <th>建议</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in overall %}
+        <tr class="product-row"
+            data-pid="{{ p.product_id }}"
+            data-chart-id="product-chart-{{ p.product_id }}"
+            data-chart-loaded="false"
+            onclick="toggleProductChart(this)">
+          <td style="font-weight:700;color:var(--accent)">#{{ p.rank }}</td>
+          <td class="brand">{{ p.brand }} <span class="tier-tag tier-{{ p.brand_tier }}">{{ p.brand_tier }}</span></td>
+          <td class="model" style="max-width:200px">{{ p.model }}</td>
+          <td style="font-size:12px;color:var(--muted)">{{ p.spec }}</td>
+          <td class="price">¥{{ p.price_yuan }}</td>
+          <td style="font-size:12px;color:var(--muted)">¥{{ p.price_per_gb }}</td>
+          <td style="font-weight:700;color:var(--accent)">{{ p.score }}</td>
+          <td><span class="rec-tag rec-{{ p.recommendation }}">{{ p.rec_label }}</span></td>
+        </tr>
+        <tr class="detail-row" style="display:none">
+          <td colspan="8" class="detail-cell">
+            <div class="detail-chart" id="product-chart-{{ p.product_id }}"></div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
+{% if perf_top %}
+<section class="group-section" style="border-color: #ff6b6b;">
+  <div class="group-header" onclick="toggleGroup(this)">
+    <h3>⚡ 纯性能榜 TOP 15（频率优先 → 低延迟优先，无视价格）</h3>
+    <span class="badge" style="background:#ff6b6b">{{ perf_top|length }} 款</span>
+  </div>
+  <div class="group-body">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>品牌</th>
+          <th>型号</th>
+          <th>规格</th>
+          <th>时序</th>
+          <th>FWL</th>
+          <th>档位</th>
+          <th>颗粒</th>
+          <th>到手价</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in perf_top %}
+        <tr class="product-row"
+            data-pid="{{ p.product_id }}"
+            data-chart-id="product-chart-{{ p.product_id }}"
+            data-chart-loaded="false"
+            onclick="toggleProductChart(this)">
+          <td style="font-weight:700;color:#ff6b6b">#{{ p.rank }}</td>
+          <td class="brand">{{ p.brand }}</td>
+          <td class="model" style="max-width:180px">{{ p.model }}</td>
+          <td style="font-size:12px;color:var(--muted)">{{ p.spec }}</td>
+          <td style="font-weight:600">{{ p.cl_str }}</td>
+          <td style="font-weight:700;color:var(--accent)">{{ p.fwl_str }}</td>
+          <td><span class="perf-tier-tag perf-{{ p.perf_tier }}">{{ p.perf_tier }}</span></td>
+          <td>{{ p.die_type }}</td>
+          <td class="price">¥{{ p.price_yuan }}</td>
+        </tr>
+        <tr class="detail-row" style="display:none">
+          <td colspan="11" class="detail-cell">
+            <div class="detail-chart" id="product-chart-{{ p.product_id }}"></div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
 {% if overview_json %}
 <div class="chart-container">
-  <h2>规格组均价走势概览</h2>
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:16px">
+    <h2 style="margin:0">规格组均价走势概览</h2>
+    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+      <span style="font-size:12px;color:var(--muted)">筛选:</span>
+      <button class="filter-btn active" onclick="toggleAllTraces(true)" title="显示全部">全部</button>
+      <button class="filter-btn" onclick="toggleAllTraces(false)" title="隐藏全部">无</button>
+      <button class="filter-btn" onclick="autoScaleY()" title="Y轴自适应范围">↕ 自适应Y轴</button>
+      {% for group in groups %}
+      <button class="filter-btn active" data-group="{{ loop.index0 }}" onclick="toggleTrace({{ loop.index0 }}, this)">
+        {{ group.key[:40] }}{% if group.key|length > 40 %}…{% endif %}
+      </button>
+      {% endfor %}
+    </div>
+  </div>
   <div id="overview-chart" style="height:420px"></div>
 </div>
 {% endif %}
@@ -274,9 +439,13 @@
         <tr>
           <th>品牌</th>
           <th>型号</th>
+          <th>类型</th>
           <th>颗粒</th>
           <th>时序</th>
+          <th>FWL</th>
+          <th>档位</th>
           <th>到手价</th>
+          <th>¥/GB</th>
           <th>趋势</th>
           <th>建议</th>
         </tr>
@@ -290,14 +459,18 @@
             onclick="toggleProductChart(this)">
           <td class="brand">{{ p.brand }}</td>
           <td class="model" title="{{ p.title }}">{{ p.model }}</td>
+          <td><span class="form-factor-tag">{{ p.form_factor }}</span></td>
           <td>{{ p.die_type or '-' }}</td>
           <td>{{ p.cl_str }}</td>
+          <td style="font-weight:700;color:var(--accent)">{{ p.fwl_str }}</td>
+          <td><span class="perf-tier-tag perf-{{ p.perf_tier }}">{{ p.perf_tier }}</span></td>
           <td class="price">¥{{ p.price_yuan }}</td>
+          <td style="font-size:12px;color:var(--muted)">¥{{ p.price_per_gb }}</td>
           <td><span class="trend-tag trend-{{ p.trend_signal }}">{{ p.trend_label }}</span></td>
           <td><span class="rec-tag rec-{{ p.recommendation }}">{{ p.rec_label }}</span></td>
         </tr>
         <tr class="detail-row" style="display:none">
-          <td colspan="7" class="detail-cell">
+          <td colspan="9" class="detail-cell">
             <div class="detail-chart" id="product-chart-{{ p.product_id }}"></div>
           </td>
         </tr>
@@ -414,6 +587,45 @@ function toggleGroup(header) {
   } else {
     body.style.display = 'none';
   }
+}
+
+// Overview chart trace toggle
+function toggleTrace(idx, btn) {
+  const chartEl = document.getElementById('overview-chart');
+  if (!chartEl || !chartEl.data) return;
+  const isActive = btn.classList.toggle('active');
+  Plotly.restyle(chartEl, {visible: isActive}, [idx]);
+}
+
+function toggleAllTraces(show) {
+  const chartEl = document.getElementById('overview-chart');
+  if (!chartEl || !chartEl.data) return;
+  const n = chartEl.data.length;
+  const visible = new Array(n).fill(show);
+  Plotly.restyle(chartEl, {visible: visible}, Array.from({length: n}, (_, i) => i));
+  // Update all group filter buttons
+  document.querySelectorAll('.filter-btn[data-group]').forEach(b => {
+    if (show) b.classList.add('active'); else b.classList.remove('active');
+  });
+}
+
+function autoScaleY() {
+  const chartEl = document.getElementById('overview-chart');
+  if (!chartEl || !chartEl.data) return;
+  const visibleTraces = chartEl.data.filter((t, i) => t.visible !== false && t.visible !== 'legendonly');
+  let yMin = Infinity, yMax = -Infinity;
+  visibleTraces.forEach(t => {
+    t.y.forEach(v => {
+      if (v < yMin) yMin = v;
+      if (v > yMax) yMax = v;
+    });
+  });
+  if (yMin < Infinity) {
+    const pad = (yMax - yMin) * 0.1 || 10;
+    Plotly.relayout(chartEl, {'yaxis.range': [yMin - pad, yMax + pad]});
+  }
+  // Also reset to auto when double-clicked
+  setTimeout(() => Plotly.relayout(chartEl, {'yaxis.autorange': true}), 2000);
 }
 </script>
 </body>

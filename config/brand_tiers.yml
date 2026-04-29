@@ -1,0 +1,45 @@
+# 品牌分档：一线、国产、其他
+# 用于报告中标记品牌档次
+
+一线:
+  - Samsung
+  - 三星
+  - SK Hynix
+  - SKhynix
+  - 海力士
+  - Micron
+  - 镁光
+  - 美光
+  - Kingston
+  - 金士顿
+  - G.Skill
+  - 芝奇
+  - Corsair
+  - 海盗船
+  - Crucial
+  - 英睿达
+  - ADATA
+  - 威刚
+  - TeamGroup
+  - Teamgroup
+  - 十铨
+  - KLEVV
+  - 科赋
+  - Patriot
+  - 博帝
+  - Lexar
+  - 雷克沙
+  - XPG
+
+国产:
+  - Gloway
+  - 光威
+  - Juhor
+  - 玖合
+  - Asgard
+  - 阿斯加特
+  - CXMT
+  - 长鑫
+  - Nanya
+  - 南亚
+  - Zadak
