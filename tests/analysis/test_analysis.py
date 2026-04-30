@@ -198,8 +198,3 @@ class TestReportGenerator:
         md = ReportGenerator.to_markdown({})
         assert "暂无数据" in md
 
-    def test_to_feishu_card(self):
-        grouped = _make_test_group()
-        card = ReportGenerator.to_feishu_card(grouped, top_n=3)
-        assert "G.Skill" in card
-        assert "建议购入" in card

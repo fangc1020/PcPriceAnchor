@@ -2,8 +2,9 @@
 
 import asyncio
 import logging
+from contextlib import aclosing
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime
 
 from price_monitor.crawlers.base import BaseCrawler
 from price_monitor.cleaners.base import BaseCleaner
@@ -54,27 +55,28 @@ class CrawlTask:
             price_repo = PriceRepository(session)
 
             try:
-                async for raw in self._crawler.search(keyword, category, max_pages):
-                    result.total_fetched += 1
+                async with aclosing(self._crawler.search(keyword, category, max_pages)) as gen:
+                    async for raw in gen:
+                        result.total_fetched += 1
 
-                    clean = self._cleaner.clean(raw)
-                    if clean is None or not self._cleaner.validate(clean):
-                        result.total_skipped += 1
-                        continue
-
-                    result.total_cleaned += 1
-
-                    try:
-                        product_id = await product_repo.upsert_product(clean)
-                        saved = await price_repo.record_price(product_id, clean)
-                        if saved:
-                            result.total_saved += 1
-                        else:
+                        clean = self._cleaner.clean(raw)
+                        if clean is None or not self._cleaner.validate(clean):
                             result.total_skipped += 1
-                    except Exception as e:
-                        msg = f"Storage error for {clean.platform_sku_id}: {e}"
-                        logger.error(msg)
-                        result.errors.append(msg)
+                            continue
+
+                        result.total_cleaned += 1
+
+                        try:
+                            product_id = await product_repo.upsert_product(clean)
+                            saved = await price_repo.record_price(product_id, clean)
+                            if saved:
+                                result.total_saved += 1
+                            else:
+                                result.total_skipped += 1
+                        except Exception as e:
+                            msg = f"Storage error for {clean.platform_sku_id}: {e}"
+                            logger.error(msg)
+                            result.errors.append(msg)
 
             except Exception as e:
                 msg = f"Crawl error: {e}"
@@ -132,18 +134,3 @@ class CrawlTask:
             result.errors.append(msg)
 
         return result
-
-    async def run_price_update(
-        self, sku_ids: list[str]
-    ) -> dict[str, int | None]:
-        """轻量价格更新：仅采集价格字段，不入库完整数据。"""
-        updates: dict[str, int | None] = {}
-        async with async_session() as session:
-            price_repo = PriceRepository(session)
-            for sku_id in sku_ids:
-                price_data = await self._crawler.fetch_price(sku_id)
-                if price_data:
-                    updates[sku_id] = price_data.get("price_fen")
-            # Price-only updates: create a minimal CleanProduct for recording
-            # This is a lightweight path; full crawl uses the main pipeline.
-        return updates

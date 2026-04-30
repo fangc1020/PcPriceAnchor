@@ -72,6 +72,15 @@ SPEC_BRAND_KEYWORDS = [
     "光威", "gloway", "玖合", "juhor", "阿斯加特", "asgard",
     "雷克沙", "lexar", "科赋", "klevv", "三星", "samsung",
     "镁光", "micron", "xpg", "zadak", "博帝", "patriot",
+    # 2026-04-30: filled gaps from crawling — many domestic/niche brands missing
+    "金百达", "kingbank", "宏碁", "acer", "掠夺者", "predator",
+    "铭瑄", "maxsun", "疆珑", "枭鲸",
+    "奔跑者", "runner", "七彩虹", "colorful", "新乐士",
+    "佰维", "biwin", "宇瞻", "apacer", "异极",
+    "来酷", "lecoo", "金泰克", "kimtigo", "王储",
+    "金邦", "geil", "yssomar", "香港黑龙",
+    # 纯代工厂（OEM die 卖家）：标题直接以颗粒厂开头
+    "海力士", "hynix", "长鑫", "cxmt",
 ]
 
 
@@ -272,8 +281,13 @@ class RamCleaner(BaseCleaner):
         for kw in SPEC_BRAND_KEYWORDS:
             if kw in title_lower:
                 return brand_normalizer.normalize(kw)
-        # 取标题第一段作为品牌
+        # Fallback: take leading segment before spec-like content
         first_word = title.split()[0] if title else ""
+        if len(first_word) > 10:
+            # Space-less Chinese title — take first 2-4 chars as brand guess
+            m = re.match(r"^([一-鿿]{2,4})", title)
+            if m:
+                first_word = m.group(1)
         return brand_normalizer.normalize(first_word)
 
     def _extract_model(self, title: str, brand: str) -> str:

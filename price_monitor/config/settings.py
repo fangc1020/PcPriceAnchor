@@ -7,7 +7,6 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://user:password@localhost:5432/price_monitor"
     jd_pt_key: str = ""
     jd_pt_pin: str = ""
-    feishu_webhook_url: str = ""
     crawl_interval_minutes: int = 120
 
 

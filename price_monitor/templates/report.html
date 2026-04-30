@@ -200,6 +200,8 @@
   .rec-watch { background: rgba(255,217,61,0.15); color: var(--watch); }
   .rec-wait { background: rgba(139,143,163,0.15); color: var(--wait); }
   .rec-accumulating { background: rgba(77,201,246,0.15); color: #4dc9f6; }
+.rec-best_value { background: rgba(255,180,0,0.15); color: #ffb400; }
+.rec-overpriced { background: rgba(139,143,163,0.08); color: #6b6e80; }
 
   .form-factor-tag {
     display: inline-block;
@@ -269,6 +271,36 @@
   .filter-btn:hover { border-color: var(--accent); color: var(--text); }
   .filter-btn.active { background: rgba(0,212,170,0.15); border-color: var(--accent); color: var(--accent); }
 
+  nav.toc {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 0;
+    margin-bottom: 24px;
+    overflow-x: auto;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  nav.toc::-webkit-scrollbar { display: none; }
+  nav.toc a {
+    display: inline-block;
+    padding: 4px 12px;
+    margin-right: 6px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    color: var(--muted);
+    font-size: 12px;
+    text-decoration: none;
+    transition: all 0.15s;
+  }
+  nav.toc a:hover { border-color: var(--accent); color: var(--text); background: rgba(0,212,170,0.08); }
+  nav.toc a.strong { border-color: rgba(255,107,107,0.3); }
+
+  html { scroll-behavior: smooth; }
+
   @media (max-width: 768px) {
     body { padding: 12px; }
     .model { max-width: 140px; }
@@ -303,8 +335,15 @@
   </div>
 </div>
 
+<nav class="toc">
+  {% if overview_json %}<a href="#overview-chart-wrap">📈 总览</a>{% endif %}
+  {% for group in groups %}
+  <a href="#group-{{ loop.index }}">{{ group.key[:18] }}{% if group.key|length > 18 %}…{% endif %}</a>
+  {% endfor %}
+</nav>
+
 {% if overall %}
-<section class="group-section" style="border-color: var(--accent);">
+<section class="group-section" style="border-color: var(--accent);" id="overall-rank">
   <div class="group-header" onclick="toggleGroup(this)">
     <h3>🏆 综合性价比总榜（跨规格组 TOP 20）</h3>
     <span class="badge">{{ overall|length }} 款</span>
@@ -318,7 +357,6 @@
           <th>型号</th>
           <th>规格</th>
           <th>时序</th>
-          <th>FWL</th>
           <th>档位</th>
           <th>到手价</th>
           <th>¥/GB</th>
@@ -343,7 +381,7 @@
           <td><span class="rec-tag rec-{{ p.recommendation }}">{{ p.rec_label }}</span></td>
         </tr>
         <tr class="detail-row" style="display:none">
-          <td colspan="8" class="detail-cell">
+          <td colspan="10" class="detail-cell">
             <div class="detail-chart" id="product-chart-{{ p.product_id }}"></div>
           </td>
         </tr>
@@ -355,7 +393,7 @@
 {% endif %}
 
 {% if perf_top %}
-<section class="group-section" style="border-color: #ff6b6b;">
+<section class="group-section" style="border-color: #ff6b6b;" id="perf-rank">
   <div class="group-header" onclick="toggleGroup(this)">
     <h3>⚡ 纯性能榜 TOP 15（频率优先 → 低延迟优先，无视价格）</h3>
     <span class="badge" style="background:#ff6b6b">{{ perf_top|length }} 款</span>
@@ -369,7 +407,6 @@
           <th>型号</th>
           <th>规格</th>
           <th>时序</th>
-          <th>FWL</th>
           <th>档位</th>
           <th>颗粒</th>
           <th>到手价</th>
@@ -387,13 +424,12 @@
           <td class="model" style="max-width:180px">{{ p.model }}</td>
           <td style="font-size:12px;color:var(--muted)">{{ p.spec }}</td>
           <td style="font-weight:600">{{ p.cl_str }}</td>
-          <td style="font-weight:700;color:var(--accent)">{{ p.fwl_str }}</td>
           <td><span class="perf-tier-tag perf-{{ p.perf_tier }}">{{ p.perf_tier }}</span></td>
           <td>{{ p.die_type }}</td>
           <td class="price">¥{{ p.price_yuan }}</td>
         </tr>
         <tr class="detail-row" style="display:none">
-          <td colspan="11" class="detail-cell">
+          <td colspan="8" class="detail-cell">
             <div class="detail-chart" id="product-chart-{{ p.product_id }}"></div>
           </td>
         </tr>
@@ -405,7 +441,7 @@
 {% endif %}
 
 {% if overview_json %}
-<div class="chart-container">
+<div class="chart-container" id="overview-chart-wrap">
   <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:16px">
     <h2 style="margin:0">规格组均价走势概览</h2>
     <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
@@ -425,7 +461,7 @@
 {% endif %}
 
 {% for group in groups %}
-<section class="group-section">
+<section class="group-section" id="group-{{ loop.index }}">
   <div class="group-header" onclick="toggleGroup(this)">
     <h3>{{ group.key }}</h3>
     <span class="badge">{{ group.count }} 款</span>
@@ -442,7 +478,6 @@
           <th>类型</th>
           <th>颗粒</th>
           <th>时序</th>
-          <th>FWL</th>
           <th>档位</th>
           <th>到手价</th>
           <th>¥/GB</th>
@@ -462,7 +497,6 @@
           <td><span class="form-factor-tag">{{ p.form_factor }}</span></td>
           <td>{{ p.die_type or '-' }}</td>
           <td>{{ p.cl_str }}</td>
-          <td style="font-weight:700;color:var(--accent)">{{ p.fwl_str }}</td>
           <td><span class="perf-tier-tag perf-{{ p.perf_tier }}">{{ p.perf_tier }}</span></td>
           <td class="price">¥{{ p.price_yuan }}</td>
           <td style="font-size:12px;color:var(--muted)">¥{{ p.price_per_gb }}</td>
@@ -470,7 +504,7 @@
           <td><span class="rec-tag rec-{{ p.recommendation }}">{{ p.rec_label }}</span></td>
         </tr>
         <tr class="detail-row" style="display:none">
-          <td colspan="9" class="detail-cell">
+          <td colspan="10" class="detail-cell">
             <div class="detail-chart" id="product-chart-{{ p.product_id }}"></div>
           </td>
         </tr>
@@ -532,9 +566,9 @@ function toggleProductChart(row) {
       const history = productHistories[pid];
       if (history && history.length > 0) {
         const dates = history.map(h => h.bucket).reverse();
-        const avgs = history.map(h => h.avg_fen / 100).reverse();
-        const mins = history.map(h => h.min_fen / 100).reverse();
-        const maxs = history.map(h => h.max_fen / 100).reverse();
+        const avgs = history.map(h => h.avg_final_fen / 100).reverse();
+        const mins = history.map(h => h.min_final_fen / 100).reverse();
+        const maxs = history.map(h => h.max_final_fen / 100).reverse();
         const allTimeLow = Math.min(...mins);
 
         const tracePrice = {

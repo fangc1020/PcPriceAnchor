@@ -196,15 +196,66 @@ class ValueRanker:
         for r in rankings:
             groups.setdefault(r.group_key, []).append(r)
 
-        # 组内按价格从低到高排序
-        for key in groups:
+        # 组内按价格从低到高排序 + 去重 + 推荐增强
+        for key in list(groups.keys()):
             groups[key].sort(key=lambda x: x.final_fen if x.final_fen > 0 else 9999999)
+            groups[key] = ValueRanker._deduplicate_group(groups[key])
+            ValueRanker._enrich_group_recommendations(groups[key])
 
         # 过滤小组，按组内平均价格排序
         filtered = {
             k: v for k, v in groups.items() if len(v) >= min_group_size
         }
         return dict(sorted(filtered.items()))
+
+    @staticmethod
+    def _deduplicate_group(group: list[ValueScore]) -> list[ValueScore]:
+        """同组内去重：同品牌+同型号只保留价格最低的。
+
+        不同 SKU / 不同卖家可能标价不同，装机佬只关心最低到手价。
+        """
+        seen: dict[str, ValueScore] = {}
+        for r in group:
+            key = f"{r.brand}|{r.model}"
+            existing = seen.get(key)
+            if existing is None:
+                seen[key] = r
+            elif r.final_fen < existing.final_fen:
+                seen[key] = r
+            # else keep the cheaper existing one
+        return list(seen.values())
+
+    @staticmethod
+    def _enrich_group_recommendations(group: list[ValueScore]) -> None:
+        """组内横向对比：数据不足时用相对价格替代统一的'积累中'。
+
+        同规格组内价格差异本身就有信息量——最便宜的值得关注，
+        显著高于中位数的标注偏贵。
+        """
+        valid = [r for r in group if r.final_fen > 0]
+        if len(valid) < 2:
+            return
+
+        prices = [r.final_fen for r in valid]
+        prices.sort()
+        n = len(prices)
+        median = prices[n // 2] if n % 2 == 1 else (prices[n // 2 - 1] + prices[n // 2]) // 2
+        group_min = prices[0]
+
+        for r in group:
+            if r.final_fen <= 0:
+                continue
+            # Only adjust when trend data is insufficient
+            if r.recommendation != "accumulating":
+                continue
+
+            # Cheapest tier: within 3% of group minimum → best deal right now
+            if r.final_fen <= group_min * 103 // 100:
+                r.recommendation = "best_value"
+            # Significantly above median → overpriced
+            elif median > 0 and r.final_fen >= median * 13 // 10:
+                r.recommendation = "overpriced"
+            # Otherwise keep "accumulating"
 
     @staticmethod
     def _calc_price_score(price_fen: int, min_price: int, price_range: int) -> float:

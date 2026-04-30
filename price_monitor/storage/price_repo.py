@@ -18,7 +18,7 @@ class PriceRepository:
             select(PriceTick.id).where(
                 PriceTick.product_id == product_id,
                 PriceTick.raw_hash == clean_product.raw_hash,
-                func.date(PriceTick.recorded_at) == func.current_date(),
+                func.date(PriceTick.recorded_at) == func.date(func.now()),
             ).limit(1)
         )
         if existing.scalar_one_or_none() is not None:

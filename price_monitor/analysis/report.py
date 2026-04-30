@@ -55,9 +55,11 @@ class ReportGenerator:
                 ppg = f"¥{r.price_per_gb:.1f}"
                 cl_str = f"CL{r.cl_latency}" if r.cl_latency else "-"
                 die_str = r.die_type or "-"
-                rec_emoji = {"buy_now": "🔥购入", "watch": "👀观望", "wait": "⏸等待", "accumulating": "📊积累中"}.get(
-                    r.recommendation, "?"
-                )
+                rec_emoji = {
+                    "buy_now": "🔥购入", "watch": "👀观望", "wait": "⏸等待",
+                    "accumulating": "📊积累中", "best_value": "💰当前最低",
+                    "overpriced": "💸偏贵",
+                }.get(r.recommendation, "?")
                 lines.append(
                     f"| {r.brand} | {r.model[:30]} | {r.form_factor} | "
                     f"{die_str} | {cl_str} | {price_yuan} | {ppg} | {rec_emoji} |"
@@ -81,7 +83,10 @@ class ReportGenerator:
             top=Side(style="thin"), bottom=Side(style="thin"),
         )
         data_font = Font(name="微软雅黑", size=10)
-        rec_labels = {"buy_now": "🔥建议购入", "watch": "👀观望", "wait": "⏸等待", "accumulating": "📊数据积累中"}
+        rec_labels = {
+            "buy_now": "🔥建议购入", "watch": "👀观望", "wait": "⏸等待",
+            "accumulating": "📊数据积累中", "best_value": "💰当前最低", "overpriced": "💸偏贵",
+        }
 
         headers = ["规格", "品牌", "型号", "类型", "颗粒", "时序", "到手价(¥)", "¥/GB", "建议"]
         col_widths = [32, 14, 36, 8, 12, 10, 14, 8, 14]
@@ -132,56 +137,6 @@ class ReportGenerator:
 
         wb.save(filepath)
 
-    @staticmethod
-    def to_feishu_card(grouped: dict[str, list[ValueScore]], top_n: int = 3) -> str:
-        """生成飞书富文本卡片 JSON。每个规格组展示 TOP N。"""
-        if not grouped:
-            return json.dumps({"msg_type": "text", "content": {"text": "暂无性价比数据"}})
-
-        elements = [
-            {
-                "tag": "div",
-                "text": {"tag": "lark_md", "content": "**🛒 内存条性价比速报（同规格对比）**"},
-            },
-            {"tag": "hr"},
-        ]
-
-        for group_key, rankings in grouped.items():
-            elements.append({
-                "tag": "div",
-                "text": {"tag": "lark_md", "content": f"**▸ {group_key}**"},
-            })
-
-            for r in rankings[:top_n]:
-                price_yuan = f"¥{r.final_fen / 100:.2f}"
-                cl_str = f"CL{r.cl_latency}" if r.cl_latency else ""
-                die_str = f" {r.die_type}" if r.die_type else ""
-                rec = {"buy_now": "🔥建议购入", "watch": "👀观望", "wait": "⏸等待", "accumulating": "📊数据积累中"}.get(
-                    r.recommendation, ""
-                )
-                elements.append({
-                    "tag": "div",
-                    "text": {
-                        "tag": "lark_md",
-                        "content": f"{r.brand} {r.model}{die_str} | {cl_str} | {price_yuan} | {rec}",
-                    },
-                })
-
-            elements.append({"tag": "hr"})
-
-        total = sum(len(v) for v in grouped.values())
-        elements.append({
-            "tag": "div",
-            "text": {
-                "tag": "lark_md",
-                "content": f"共 {len(grouped)} 个规格组、{total} 款商品",
-            },
-        })
-
-        return json.dumps(
-            {"msg_type": "interactive", "card": {"elements": elements}},
-            ensure_ascii=False,
-        )
 
     @staticmethod
     def to_html(
@@ -192,7 +147,7 @@ class ReportGenerator:
         """生成带 Plotly 交互图表的 HTML 报告。"""
         env = Environment(
             loader=FileSystemLoader(Path(__file__).parent.parent / "templates"),
-            autoescape=False,
+            autoescape=True,
         )
         template = env.get_template("report.html")
 
@@ -216,6 +171,10 @@ class ReportGenerator:
                 data_days = trend.data_days if trend else 0
                 if rec == "accumulating":
                     rec_label = f"📊积累中 {data_days}/7天"
+                elif rec == "best_value":
+                    rec_label = "💰当前最低"
+                elif rec == "overpriced":
+                    rec_label = "💸偏贵"
                 else:
                     rec_label = {"buy_now": "🔥建议购入", "watch": "👀观望", "wait": "⏸等待"}.get(rec, "?")
                 products_data.append({
@@ -225,7 +184,6 @@ class ReportGenerator:
                     "title": p.title,
                     "die_type": p.die_type,
                     "cl_str": f"CL{p.cl_latency}" if p.cl_latency else "-",
-                    "fwl_str": f"{p.fwl_ns:.1f}ns" if p.fwl_ns else "-",
                     "perf_tier": p.performance_tier,
                     "price_yuan": f"{p.final_fen / 100:.2f}",
                     "price_per_gb": f"{p.price_per_gb:.1f}",

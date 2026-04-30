@@ -127,36 +127,12 @@ async def run_analysis() -> None:
         # Open in browser
         webbrowser.open(f"file://{html_path.resolve()}")
 
-        # Optionally push to Feishu
-        if settings.feishu_webhook_url:
-            await _send_feishu(grouped)
-
-
-async def _send_feishu(grouped) -> None:
-    import httpx
-
-    from price_monitor.analysis.report import ReportGenerator
-
-    card = ReportGenerator.to_feishu_card(grouped)
-    try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(10.0)) as client:
-            resp = await client.post(
-                settings.feishu_webhook_url,
-                content=card,
-                headers={"Content-Type": "application/json"},
-            )
-            resp.raise_for_status()
-            logger.info("Feishu notification sent.")
-    except Exception as e:
-        logger.warning("Feishu notification failed: %s", e)
-
-
 async def main() -> None:
     scheduler = AsyncIOScheduler()
 
     # 每 2 小时采集一次
     scheduler.add_job(
-        lambda: asyncio.create_task(run_once()),
+        run_once,
         "interval",
         minutes=settings.crawl_interval_minutes,
         id="crawl_job",
